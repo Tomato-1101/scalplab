@@ -1,0 +1,15 @@
+# 録画対象の選定設定（scalplab.datafeed.universe が読む）
+# fixed → auto の順で max_symbols までクリップする。
+#
+# auto ランキングは松井証券の Tick回数ランキング（本物の約定回数）をネット取得して使う
+# （ranking_source: matsui_tick）。取得不可時は直近保存 → 売買代金プロキシ（yfinance の
+# Close×Volume）の順に自動フォールバックする。
+
+ranking_source: matsui_tick   # auto ランキング源。matsui_tick=松井Tick回数 / それ以外=売買代金プロキシ
+fixed: []            # 常時録画する code（例 JP.7203）。ユーザーが手で編集する
+auto_top_n: 25       # ランキング上位から採用する数（毎日の日本株自動保存数。指定で 40→25）
+max_symbols: 48      # 合計上限（購読クォータ100・2購読/銘柄の範囲内に収める）
+
+# --- 以下は上級者向け（通常は既定で良い） ---
+pool_size: 300       # 週次フルスキャンで維持する流動プールの銘柄数
+scan_chunk: 200      # yfinance 一括取得のチャンクサイズ（大きすぎると失敗しやすい）

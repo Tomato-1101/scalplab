@@ -1,0 +1,66 @@
+# リアルタイムシグナル通知（scalplab.live）の設定。
+#
+# 起動: .venv/bin/python -m scalplab.live          （セッション時間内のみ稼働・手動起動）
+#       .venv/bin/python -m scalplab.live --check   （接続→購読→10秒受信の疎通確認・市場外でも可）
+#
+# マシン固有の設定は **config/live.local.yaml**（Git 管理外）に書く。存在すればトップレベルキー単位で
+# このファイルを上書きする。Mac と Windows で同じリポジトリを共有しており、ここを直接書き換えると
+# 拠点間で毎回衝突するため（例: Windows は `source: kabu` と JP 銘柄の `watch:` だけを local に置く）。
+# **このファイル本体は共有既定のまま編集しない。**
+
+# ティック供給源（証券会社）: moomoo | kabu
+#   moomoo : moomoo OpenD 経由（米国株・NY 09:30-16:00）。既定。
+#   kabu   : auカブコム kabu STATION API 経由（日本株・東証 09:00-11:30/12:30-15:30）。
+#            **Windows 常駐アプリ必須**。APIPassword は環境変数から読む（下の kabu 節参照）。
+#            日本株を監視する場合は source: kabu にして watch を JP.* に差し替える。
+source: moomoo
+
+# kabu STATION の接続設定（source: kabu のときのみ使う）。
+kabu:
+  password_env: KABU_API_PASSWORD   # APIPassword を読む環境変数名（平文はここに書かない）
+  host: localhost
+  port: 18080                        # 本番。検証用アプリなら 18081
+  exchange: 1                        # 1=東証（現物）
+  reconnect_tries: 1                 # WebSocket 切断時の再接続回数
+
+# 監視銘柄。source: moomoo なら US.<ティッカー>、source: kabu なら JP.<証券コード>。
+# 録画デーモン(record.py)と同じ (code, TICKER) を購読する銘柄は OpenD 側で購読が重複排除され
+# クォータを二重消費しない（moomoo の --check の used/remain で確認可）。
+watch:
+  - US.TQQQ
+  - US.SOXL
+  - US.SOXS
+  - US.NVDA
+# 日本株（source: kabu）の watch 例（kabu STATION は最大50銘柄）:
+#   - JP.7203   # トヨタ自動車
+#   - JP.9984   # ソフトバンクグループ
+#   - JP.6501   # 日立製作所
+#   - JP.285A   # キオクシア
+
+# 検知パラメータ。空（{}）のときは config/best-params.yaml の米国チャンピオンを自動ロードする。
+# ここに書けばチャンピオンを上書きできる（掃引で見つけた別パラメータをライブで試す用）。
+#
+# 例1: チャンピオン（角度＋直前差＋効率。空にすれば同じものが自動ロードされる）
+#   params:
+#     rci_period: 9
+#     slope_window_sec: 20
+#     slope_threshold: 30.0
+#     eff_min: 4.0
+#     prev_diff_min: 25.0
+#     cooldown_sec: 60
+#
+# 例2: トゲ反転単独モード（角度・直前差・効率を切り、V字/逆V字の反転点だけを取る）
+#   params:
+#     rci_period: 9
+#     slope_window_sec: 20
+#     slope_threshold: 0        # 角度ゲート OFF
+#     prev_diff_min: 0          # 直前差ゲート OFF
+#     eff_min: 0                # 効率フィルタ OFF
+#     spike_depth_min: 100      # 窓内の先行高値→トラフの落差の下限
+#     spike_turn_min: 40        # トラフからの戻りの下限
+#     cooldown_sec: 60
+params: {}
+
+# 通知設定。
+notify:
+  sound: true   # true なら macOS 通知に音（Glass）を付ける。false なら無音通知

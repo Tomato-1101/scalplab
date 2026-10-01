@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  scalp-lab ティック録画の launchd テンプレート。
+  __ABSOLUTE_PATH__ は scripts/install_launchd.sh がプロジェクト実パスに置換する
+  （リポジトリに絶対パスをコミットしないため）。平日 8:50 JST に起動する。
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.scalplab.recorder</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__ABSOLUTE_PATH__/.venv/bin/python</string>
+        <string>-m</string>
+        <string>scalplab.record</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__ABSOLUTE_PATH__</string>
+
+    <!-- 平日（月=1 〜 金=5）8:50 に起動。recorder 側が寄り付き 9:00 まで待機する。 -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>50</integer></dict>
+        <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>50</integer></dict>
+        <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>50</integer></dict>
+        <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>50</integer></dict>
+        <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>8</integer><key>Minute</key><integer>50</integer></dict>
+    </array>
+
+    <!-- 起動は StartCalendarInterval のみ。ロード時の即時起動はしない。 -->
+    <key>RunAtLoad</key>
+    <false/>
+
+    <!-- 場中にクラッシュ（非ゼロ終了）したら自動再起動する。正常終了（15:35 finalize 後や
+         引け後起動ガードの exit 0）では再起動しない。再開時は live CSV へ追記され、
+         finalize の seq 重複排除で継ぎ目なくマージされる。 -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>__ABSOLUTE_PATH__/logs/launchd-recorder.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__ABSOLUTE_PATH__/logs/launchd-recorder.err.log</string>
+</dict>
+</plist>

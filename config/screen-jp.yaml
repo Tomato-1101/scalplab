@@ -1,0 +1,41 @@
+# クロス銘柄スクリーニング設定（日本株・bars1m バー近似版）
+#   蓄積: data/bars1m/YYYY-MM-DD/{code}.parquet（yfinance 1分足を毎日 15:35 に自動蓄積、7/15〜）
+#   評価: python -m scalplab.backtest.screen --config config/screen-jp.yaml
+#
+# 目的: 主戦場の日本株で「どの銘柄でこの手法が効きそうか」を横断的に粗くランキングする。日本株は
+#       ティックが取れないため、当面は yfinance 1分足のバー近似（rci_impulse_bar）で回す。intrabar 情報が
+#       無いので感度は本命ティック版に劣る。絶対期待値ではなく銘柄間の相対比較として読む。
+
+source: bars1m         # data/bars1m/ の日付別レイアウトを loader 契約 API 経由で日付横断に連結
+session: jp            # JP 立会（前場 09:00〜11:30 / 後場 12:30〜15:30, JST）。前場/後場ごとに分割し昼休み跨ぎを除外
+symbols: auto          # bars1m に録画済みの全 JP 銘柄を自動対象化（固定列挙を保守しない）
+
+days: 10               # 「直近 N 日分の bars1m」。録画済み日付ディレクトリを新しい順に最大 N 件使う
+cost_bp: 3.0           # 片道概算コスト（bp）。net = gross - cost_bp
+min_signals: 10        # summary の銘柄採用しきい値。日数が少ないので US（30）より緩め
+eval_bars: [1, 2, 3]   # エントリー（シグナルバー終値 close[t]。2026-07-19 早期化で翌始値→終値に変更）からの評価ホライズン（バー数）
+
+# パラメータグリッド（総当たり）: rci_period × slope_threshold × prev_diff_min × rci_sign_gate ×
+#   spike_depth_min × spike_turn_min = 2×2×2×2×2×2 = 64 通り（要件 2026-07-18: トゲ反転の掃引を追加）。
+#   slope_threshold=0 が「角度 OFF＝トゲ単独運用」、20 が「従来の角度型」。spike_depth_min/spike_turn_min の
+#   0/0 が「トゲ OFF（＝従来条件のベースライン）」、100/40 が「トゲ ON（UI 既定値）」。これで
+#   「従来条件×ベースライン」「トゲ単独」「併用」を 1 グリッドで横断比較できる（V 底＝ロング/逆V＝ショート）。
+#   トゲの反転点は窓端点間 ΔRCI がまだ負で角度と両立しにくいため、slope=0（角度 OFF）の行がトゲ本来の運用。
+grid:
+  rci_period: [9, 14]
+  slope_threshold: [0, 20]
+  prev_diff_min: [0, 25]
+  rci_sign_gate: [0, 1]
+  spike_depth_min: [0, 100]
+  spike_turn_min: [0, 40]
+
+# 固定パラメータ（グリッドで振らない SAR/ATR/クールダウン等）
+fixed:
+  eff_min: 1.0
+  spike_window_bars: 10   # トゲ反転の窓（本数）。JP 掃引で 6 より捕捉良好だったため 10 固定
+  af_init: 0.02
+  af_step: 0.02
+  af_max: 0.2
+  atr_period: 14
+  cooldown_bars: 3
+  floor: 0.1

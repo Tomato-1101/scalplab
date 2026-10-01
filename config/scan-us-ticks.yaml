@@ -1,0 +1,24 @@
+# 実ティック（米国）でのパラメータ絞り込み用スキャン設定
+#   python -m scalplab.backtest.scan --config config/scan-us-ticks.yaml
+# 対象は 2026-07-15 NY セッションの実録画ティック、銘柄はデフォルトパラメータ検証の上位4。
+# rci_period はユーザー指定の短期9に固定し、ユーザーの核心仮説である
+# 「直前RCI差（尖り）」prev_diff_min を独立次元としてスキャンする。
+
+date: 2026-07-15
+codes: [US.TQQQ, US.SOXS, US.SOXL, US.NVDA]
+min_signals: 20
+horizon: 60
+
+grid:
+  rci_period: [9]
+  slope_window_sec: [20, 30]
+  slope_threshold: [10, 20, 30]
+  eff_min: [2.0, 4.0]
+  prev_diff_min: [0.0, 25.0, 50.0]
+  af_init: [0.02]
+  af_step: [0.02]
+  af_max: [0.2]
+  cooldown_sec: [60]
+  atr_period: [14]
+  floor: [0.1]
+  slippage_ticks: [0]

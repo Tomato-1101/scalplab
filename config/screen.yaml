@@ -1,0 +1,77 @@
+# クロス銘柄スクリーニング設定（RCI×パラボリック手法のバー近似版）
+#   取得: python -m scalplab.datafeed.history --days 21
+#   評価: python -m scalplab.backtest.screen
+#
+# 目的: moomoo の過去1分足で「どの銘柄・商品で手法が効きそうか」を横断的に粗くランキングし、
+#       本命のティック精密検証に進む銘柄を絞る（ふるい）。バー近似のため感度は落ちる。
+#
+# 銘柄クォータ厳守: 過去Kラインは 30 日で 100 銘柄まで。日本株解禁時の枠を温存するため、
+# 米国株はここに並ぶ 40 銘柄までに制限する（この数を増やす場合はクォータ残を確認）。
+
+# 流動性 + 日中ボラで選んだ米国 40 銘柄（超高流動 ETF/レバ ETF + メガテック + 半導体 + 高ベータ）。
+symbols:
+  # 超高流動 ETF・レバレッジ ETF（スキャル定番）
+  - US.SPY
+  - US.QQQ
+  - US.TQQQ
+  - US.SOXL
+  - US.SQQQ
+  - US.SOXS
+  # メガキャップ・大商い
+  - US.NVDA
+  - US.TSLA
+  - US.AAPL
+  - US.META
+  - US.AMZN
+  - US.MSFT
+  - US.GOOGL
+  - US.AVGO
+  - US.NFLX
+  # 半導体・高ボラ
+  - US.AMD
+  - US.MU
+  - US.SMCI
+  - US.INTC
+  - US.QCOM
+  - US.ARM
+  - US.TSM
+  - US.MRVL
+  # 高ベータ・モメンタム・暗号資産連動・フィンテック・量子
+  - US.PLTR
+  - US.COIN
+  - US.MSTR
+  - US.MARA
+  - US.HOOD
+  - US.SOFI
+  - US.IONQ
+  - US.RIOT
+  - US.RGTI
+  - US.CVNA
+  - US.AFRM
+  - US.RIVN
+  - US.DKNG
+  - US.UBER
+  - US.CLSK
+  - US.GME
+  - US.LCID
+
+days: 21              # 取得・評価する直近日数
+cost_bp: 3.0          # 片道概算コスト（bp）。net = gross - cost_bp
+min_signals: 30       # summary の銘柄採用しきい値（グリッド中央値のシグナル数がこれ未満なら除外）
+rth_only: true        # true なら 09:31〜16:00（米国東部）の通常取引時間だけに絞る
+eval_bars: [1, 2, 3]  # エントリー（次バー始値）からの評価ホライズン（バー数）
+
+# パラメータグリッド（総当たり）: rci_period × slope_threshold × eff_min = 2×3×3 = 18 通り
+grid:
+  rci_period: [9, 14]
+  slope_threshold: [10, 20, 30]
+  eff_min: [1.0, 2.0, 4.0]
+
+# 固定パラメータ（グリッドで振らない SAR/ATR/クールダウン等）
+fixed:
+  af_init: 0.02
+  af_step: 0.02
+  af_max: 0.2
+  atr_period: 14
+  cooldown_bars: 3
+  floor: 0.1

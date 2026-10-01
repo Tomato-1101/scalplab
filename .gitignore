@@ -1,0 +1,33 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Secrets (never commit)
+.env
+.env.*
+*.pem
+*.key
+
+# Recorded and generated data (large, personal, or derived from third-party feeds)
+data/
+logs/
+reports/
+*.parquet
+*.sqlite3
+*.log
+
+# Machine-specific live config (source / watch list per host) and credential material
+config/live.local.yaml
+config/kabu_pin.dat
+
+# Company-name master derived from JPX / J-Quants data (not redistributed; see
+# config/jp_names.sample.csv and docs/data-contract.md for how to build it)
+config/jp_names.csv

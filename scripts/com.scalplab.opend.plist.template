@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  moomoo_OpenD.app の自動起動・自動再起動（死活監視）の launchd テンプレート。
+  __ABSOLUTE_PATH__ は scripts/install_launchd.sh がプロジェクト実パスに置換する
+  （リポジトリに絶対パスをコミットしないため）。
+
+  OpenD は GUI アプリなので launchd から直接プロセス管理せず、opend_guard.sh が
+  ポート 11111 の待ち受けを見て落ちていれば `open -g` で起動する方式にしている
+  （launchd に直接バイナリを持たせると GUI セッション外で起動して moomoo のログイン状態を失う）。
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.scalplab.opend</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>__ABSOLUTE_PATH__/scripts/opend_guard.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__ABSOLUTE_PATH__</string>
+
+    <!-- ログイン直後に一度起動する（Mac 再起動後に OpenD が上がらなかった 2026-07-29 の再発防止）。 -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- 5 分毎に死活確認。録画開始（JST 8:50 / 22:20）までに必ず 1 回は通る粒度。 -->
+    <key>StartInterval</key>
+    <integer>300</integer>
+
+    <key>StandardOutPath</key>
+    <string>__ABSOLUTE_PATH__/logs/launchd-opend.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__ABSOLUTE_PATH__/logs/launchd-opend.err.log</string>
+</dict>
+</plist>

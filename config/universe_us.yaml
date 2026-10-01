@@ -1,0 +1,73 @@
+# 米国株の録画対象（scalplab.datafeed.universe の resolve_codes_us が読む）
+# fixed（下記）を母集団に、録画実績（ティック回数）で並べ替えて max_symbols までクリップする。
+#
+# ★ この fixed リストはユーザーが自由に編集してよい（銘柄の追加・削除・入れ替え自由）。
+#   code は moomoo 形式（US.<ティッカー>）。
+#
+# ranking:
+#   tick_count → 前回録画セッション（data/ticks/<直近NYセッション日>/ の各 parquet 行数）の
+#                実ティック数で「非コア」銘柄を降順に並べ替え、上位から max_symbols まで採用する。
+#                取引が活発だった銘柄を継続録画するのが狙い。
+#                録画実績が1日も無い場合（初回夜）は fixed 全体（先頭から max_symbols）にフォールバックする。
+#   （null/未設定 → 従来どおり fixed の記載順のみ）
+# core:
+#   ティック数に関わらず常に先頭から確保する fixed 銘柄数。相場の主軸として毎晩必ず録画したい銘柄を
+#   fixed の先頭に置き、その本数を core に指定する。残り枠をティック数上位で埋める。
+
+# 流動性・日中ボラの高いデイトレ向き初期リスト（約30銘柄）。
+fixed:
+  # 2026-07-15 スクリーニング上位の追加分（reports/screen-20260715-153600。ティック精密検証の重点）
+  - US.SOXL
+  - US.SOXS
+  - US.CLSK
+  - US.TQQQ
+  - US.SQQQ
+  - US.QQQ
+  - US.SPY
+  # メガキャップ・大商い
+  - US.NVDA
+  - US.TSLA
+  - US.AAPL
+  - US.AMD
+  - US.META
+  - US.AMZN
+  - US.MSFT
+  - US.GOOGL
+  - US.AVGO
+  - US.NFLX
+  # 半導体・高ボラ
+  - US.MU
+  - US.INTC
+  - US.SMCI
+  - US.QCOM
+  - US.ARM
+  - US.TSM
+  # 暗号資産連動・高ベータ
+  - US.COIN
+  - US.MSTR
+  - US.MARA
+  - US.RIOT
+  - US.HOOD
+  # リテール人気・値動き大
+  - US.PLTR
+  - US.SOFI
+  - US.GME
+  - US.AMC
+  - US.RIVN
+  - US.SNAP
+  # その他流動株
+  - US.UBER
+  - US.DIS
+  - US.BAC
+  # コモディティ ETF（2026-07-20 指示: コモディティでも手法を検証するため録画開始。
+  # 先物そのものではなく、まず米国市場のティックが既存基盤でそのまま録れる ETF で検証する）
+  - US.GLD    # 金
+  - US.SLV    # 銀
+  - US.USO    # 原油(WTI)
+  - US.UNG    # 天然ガス
+  - US.GDX    # 金鉱株
+  - US.XLE    # エネルギー株セクター
+
+ranking: tick_count   # 前回録画セッションの実ティック数で非コア銘柄を並べ替える（上記コメント参照）
+core: 15              # fixed 先頭 15 銘柄はティック数に関わらず常時録画のコアとして確保する
+max_symbols: 48   # 合計上限（購読クォータ100・2購読/銘柄の範囲内）

@@ -1,0 +1,23 @@
+# 録画デーモン設定（scalplab.record が読む）
+
+# 購読する SubType。既定は歩み値(TICKER) + L1気配(ORDER_BOOK)。
+# 注意: L1 の bid/ask は ORDER_BOOK でしか取れない。SubType.QUOTE は last_price 系のみで
+# bid/ask を含まない（futu 10.8 実測）。契約 quotes(bid/ask/bid_vol/ask_vol) を満たすため
+# 既定を ORDER_BOOK にしている。moomoo の1分足も購読したいなら "K_1M" を足す
+# （ただし契約 bars1m は録画ティックから合成するのが正なので K_1M は受信数カウントのみ）。
+subtypes: ["TICKER", "ORDER_BOOK"]
+
+# 東証セッション（JST）。8:5x 起動なら morning 開始まで待機し、finalize_at で自終了する。
+session:
+  premarket_wait_from: "08:50"
+  morning: ["09:00", "11:30"]
+  afternoon: ["12:30", "15:30"]
+  finalize_at: "15:35"
+
+# セッション終了後に yfinance の当日1分足を JP 銘柄へ補完する（日本株権限が無い間の保険）。
+# 権限が付くまでは 1分足だけでも毎日貯めたいので既定 ON（ティック由来 bars1m がある銘柄は上書きしない）。
+fallback_bars: true
+
+# 運用パラメータ
+summary_interval_sec: 60   # 進捗サマリーの間隔（沈黙させない）
+stale_timeout_sec: 90      # セッション中この秒数データが来なければ再接続を試みる

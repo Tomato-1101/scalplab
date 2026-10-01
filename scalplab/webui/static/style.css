@@ -1,0 +1,463 @@
+/* scalp-lab エントリー確認 UI — ダークテーマ。左に銘柄リスト・中央にチャート・右に条件/統計/一覧。 */
+:root {
+  --bg: #0e1116;
+  --panel: #161b22;
+  --panel-2: #1c2129;
+  --border: #2a3038;
+  --text: #c9d1d9;
+  --muted: #7d8896;
+  --accent: #4c9aff;
+  --up: #26a69a;
+  --down: #ef5350;
+  --long: #26c281;
+  --short: #ef5350;
+  --sar: #b07be0;
+  --ann: #ffd24a;   /* 注釈マーカー・注釈モードのアクセント（エントリーシグナルと区別する金色） */
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; height: 100%;
+  background: var(--bg); color: var(--text);
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+}
+body { display: flex; flex-direction: column; overflow: hidden; }
+.hidden { display: none !important; }
+[hidden] { display: none !important; }
+
+/* --- 上部バー --- */
+#topbar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+.brand { font-weight: 700; font-size: 14px; white-space: nowrap; }
+.brand span { color: var(--muted); font-weight: 400; font-size: 12px; }
+
+.tabs { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.tabs button {
+  background: var(--panel-2); color: var(--muted); border: none;
+  padding: 6px 18px; cursor: pointer; font-size: 13px;
+}
+.tabs button.active { background: var(--accent); color: #051020; font-weight: 600; }
+
+.current-symbol { font-size: 15px; color: var(--text); white-space: nowrap; }
+.current-symbol small { color: var(--muted); font-size: 11px; font-weight: 400; margin-left: 5px; }
+
+/* レジームバッジ（順張り＝緑系 / 逆張り＝橙系）。クリックで再計算。 */
+.regime-badge {
+  font-weight: 700; font-size: 12px; padding: 4px 12px; border-radius: 999px;
+  border: 1px solid var(--border); cursor: pointer; white-space: nowrap;
+  background: var(--panel-2); color: var(--text);
+}
+.regime-badge:hover { filter: brightness(1.12); }
+.regime-badge.regime-trend { background: rgba(38,194,129,0.18); color: var(--long); border-color: rgba(38,194,129,0.5); }
+.regime-badge.regime-revert { background: rgba(245,167,66,0.20); color: #f5a742; border-color: rgba(245,167,66,0.55); }
+.regime-badge.regime-trend::before { content: "▲ "; }
+.regime-badge.regime-revert::before { content: "▼ "; }
+
+.control { display: flex; flex-direction: column; gap: 3px; }
+.control > span { font-size: 11px; color: var(--muted); }
+.control select, .control input {
+  background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px; padding: 5px 7px; font-size: 13px;
+}
+.control select:focus, .control input:focus { outline: none; border-color: var(--accent); }
+#tfControl { margin-left: auto; }
+
+/* 日送りナビ（日本株1分足のみ表示・1営業日単位＋全期間切替。2026-07-21） */
+#dayNav { margin-left: auto; }
+.daynav { display: flex; align-items: center; gap: 8px; }
+.daynav-btn {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 9px; font-size: 12px; cursor: pointer; line-height: 1;
+}
+.daynav-btn:hover:not(:disabled) { border-color: var(--accent); }
+.daynav-btn:disabled { opacity: 0.35; cursor: default; }
+.daynav-label { font-variant-numeric: tabular-nums; font-size: 13px; min-width: 92px; text-align: center; }
+.daynav-all {
+  background: var(--panel-2); color: var(--muted); border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer;
+}
+.daynav-all:hover { border-color: var(--accent); color: var(--text); }
+.daynav-all.active { background: var(--accent); color: #051020; border-color: var(--accent); font-weight: 600; }
+/* 日送り隣のレジームバッジ（表示日のレジーム。視認性重視で大きめ・アイコン+文字+背景塗り） */
+.daynav-regime { padding: 5px 13px; font-size: 13px; font-weight: 700; }
+/* 日送りで判定が変わったときの一瞬ハイライト */
+@keyframes regime-flash {
+  0% { box-shadow: 0 0 0 0 rgba(76,154,255,0.0); transform: scale(1); }
+  25% { box-shadow: 0 0 0 4px rgba(76,154,255,0.55); transform: scale(1.08); }
+  100% { box-shadow: 0 0 0 0 rgba(76,154,255,0.0); transform: scale(1); }
+}
+.regime-badge.flash { animation: regime-flash 0.6s ease-out; }
+
+/* 期間入力（スクリーニングタブで使用） */
+.period-inputs { display: flex; align-items: center; gap: 6px; }
+.period-inputs input[type="date"] {
+  background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; font-size: 12px;
+  color-scheme: dark;
+}
+.period-inputs input[type="date"]:focus { outline: none; border-color: var(--accent); }
+.period-sep { color: var(--muted); font-size: 12px; }
+
+/* --- ワークスペース（3 カラム） --- */
+#workspace { flex: 1 1 auto; display: flex; min-height: 0; }
+body.tab-screen #symbolList,
+body.tab-screen #chartArea,
+body.tab-screen #sidebar { display: none; }
+body.tab-chart #screenView { display: none; }
+
+/* --- 左: 銘柄リスト --- */
+#symbolList {
+  flex: 0 0 220px; background: var(--panel); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; min-height: 0;
+}
+.sym-search { padding: 8px; border-bottom: 1px solid var(--border); }
+.sym-search input {
+  width: 100%; background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px; font-size: 12px;
+}
+.sym-search input:focus { outline: none; border-color: var(--accent); }
+.sym-groups { overflow-y: auto; flex: 1 1 auto; }
+.sym-group-title {
+  padding: 9px 10px 4px; font-size: 11px; font-weight: 700; color: var(--muted);
+  position: sticky; top: 0; background: var(--panel); z-index: 1;
+}
+.sym-ul { list-style: none; margin: 0 0 6px; padding: 0; }
+.sym-item {
+  display: flex; align-items: baseline; gap: 8px; padding: 6px 10px;
+  cursor: pointer; border-left: 3px solid transparent;
+}
+.sym-item:hover { background: var(--panel-2); }
+.sym-item.selected { background: #1b2b3a; border-left-color: var(--accent); }
+.sym-main { flex: 1 1 auto; min-width: 0; font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sym-sub { flex: 0 0 auto; font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sym-empty { padding: 16px; color: var(--muted); font-size: 12px; }
+
+/* --- 中央: チャート --- */
+#chartArea { position: relative; flex: 1 1 auto; display: flex; flex-direction: column; min-width: 400px; }
+#mainChart { flex: 3 1 0; min-height: 0; }
+#rciChart { flex: 1 1 0; min-height: 0; border-top: 1px solid var(--border); }
+
+/* --- ペイン境界のドラッグリサイズ用グリップ --- */
+/* 縦グリップ（左｜中央・中央｜右）。掴みやすいよう ::before で当たり判定を左右 2px ずつ広げる。 */
+.col-resizer {
+  flex: 0 0 6px; align-self: stretch; cursor: col-resize;
+  background: var(--border); position: relative; z-index: 7; touch-action: none;
+}
+.col-resizer::before { content: ""; position: absolute; top: 0; bottom: 0; left: -2px; right: -2px; }
+.col-resizer:hover, .col-resizer.dragging { background: var(--accent); }
+/* 横グリップ（メイン｜RCI）。同じく上下に当たり判定を広げる。 */
+.row-resizer {
+  flex: 0 0 6px; cursor: row-resize;
+  background: var(--border); position: relative; z-index: 7; touch-action: none;
+}
+.row-resizer::before { content: ""; position: absolute; left: 0; right: 0; top: -2px; bottom: -2px; }
+.row-resizer:hover, .row-resizer.dragging { background: var(--accent); }
+/* スクリーニングタブでは 3 カラムを隠すので縦グリップも隠す（横グリップは chartArea 内なので自動で隠れる）。 */
+body.tab-screen .col-resizer { display: none; }
+
+.legend, .readout {
+  position: absolute; z-index: 5; background: rgba(14,17,22,0.82);
+  border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px;
+  font-size: 11px; pointer-events: none; backdrop-filter: blur(2px);
+}
+.legend { top: 8px; left: 10px; display: flex; flex-wrap: wrap; gap: 4px 12px; max-width: 70%; }
+.readout { top: 8px; right: 12px; text-align: right; line-height: 1.5; }
+.legend .item { display: inline-flex; align-items: center; gap: 5px; }
+.legend .boll-legend { cursor: pointer; }
+.legend .boll-legend.off { opacity: 0.45; text-decoration: line-through; }
+.legend .swatch { width: 12px; height: 3px; border-radius: 2px; display: inline-block; }
+.legend .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+/* 過去データ読み込み中の小さなインジケータ（左上・スクロール遡り時のみ表示） */
+.more-loading {
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 8;
+  background: rgba(14,17,22,0.92); border: 1px solid var(--border); border-radius: 20px;
+  padding: 4px 14px; font-size: 11px; color: var(--muted); pointer-events: none;
+}
+
+/* オーバーレイ（ローディング / 空状態） */
+.overlay {
+  position: absolute; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+  background: rgba(14,17,22,0.72);
+}
+.spinner {
+  width: 34px; height: 34px; border: 3px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 10px;
+}
+#loading { flex-direction: column; color: var(--muted); }
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty-box { text-align: center; color: var(--muted); max-width: 360px; padding: 20px; }
+.empty-icon { font-size: 32px; margin-bottom: 8px; }
+
+/* --- 右: 条件 + 統計 + エントリー一覧 --- */
+#sidebar {
+  flex: 0 0 380px; background: var(--panel); border-left: 1px solid var(--border);
+  display: flex; flex-direction: column; min-height: 0;
+}
+
+/* 条件ブロック: 既定は自然高さ。JS が px 高さを当てたら固定＋内部スクロール（内容が消えない）。 */
+.conditions { padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--panel-2); flex: 0 0 auto; overflow-y: auto; min-height: 0; }
+.cond-head { font-weight: 700; font-size: 12px; margin-bottom: 9px; }
+.cond-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.cond-row.small { margin-bottom: 6px; }
+.cond-row:last-of-type { margin-bottom: 0; }
+.cond-toggle { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.cond-toggle input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+.cond-label { font-size: 12px; color: var(--text); }
+.cond-num {
+  width: 66px; margin-left: auto; text-align: right;
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px; padding: 4px 7px; font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.cond-num:focus { outline: none; border-color: var(--accent); }
+.cond-num:disabled { opacity: 0.35; }
+/* トゲ反転の深さ/戻り 2入力サブ行（margin-left:auto を外して左詰め・幅を詰める） */
+.spike-sub .cond-num { width: 54px; margin-left: 0; }
+.spike-sub .spike-lbl2 { margin-left: 8px; }
+
+/* --- モード3択セグメント（2026-07-21） --- */
+.mode-seg { display: flex; gap: 0; margin-bottom: 6px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.mode-btn {
+  flex: 1; background: var(--panel); color: var(--muted); border: none;
+  padding: 8px 4px; font-size: 13px; font-weight: 600; cursor: pointer;
+  border-right: 1px solid var(--border);
+}
+.mode-btn:last-child { border-right: none; }
+.mode-btn:hover { color: var(--text); }
+.mode-btn.active { background: var(--accent); color: #051020; }
+.mode-desc { font-size: 11px; color: var(--muted); margin-bottom: 10px; line-height: 1.4; }
+.mode-desc.is-trend { color: var(--long); }
+.mode-desc.is-revert { color: #f5a742; }
+
+/* 実効トリガーでない簡易パラメータ行は淡色（値は残す＝バンド描画等に使う） */
+.cond-row.inactive { opacity: 0.4; }
+
+/* --- 詳細設定（折りたたみ） --- */
+.detail-toggle {
+  width: 100%; text-align: left; margin: 4px 0 6px;
+  background: var(--panel); color: var(--muted); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer;
+}
+.detail-toggle:hover { border-color: var(--accent); color: var(--text); }
+.detail-panel {
+  border: 1px solid var(--border); border-radius: 6px; padding: 8px 9px; margin-bottom: 8px;
+  background: var(--panel);
+}
+.detail-panel .cond-row:last-child { margin-bottom: 0; }
+
+.cond-row.locked {
+  background: rgba(76,154,255,0.08); border: 1px solid rgba(76,154,255,0.25);
+  border-radius: 6px; padding: 7px 9px; margin-bottom: 10px;
+}
+.cond-lock { font-size: 12px; }
+.cond-fixed { margin-left: auto; font-size: 11px; color: var(--accent); font-weight: 600; }
+
+.help {
+  width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--border);
+  color: var(--muted); font-size: 11px; text-align: center; cursor: help; position: relative;
+  display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
+}
+.help:hover, .help:focus { color: var(--text); border-color: var(--accent); outline: none; }
+.help:hover::after, .help:focus::after {
+  content: attr(data-tip);
+  position: absolute; top: 135%; right: 0; width: 240px;
+  background: #0b0e13; border: 1px solid var(--border); border-radius: 6px;
+  padding: 8px 10px; font-size: 11px; line-height: 1.55; color: var(--text);
+  text-align: left; white-space: normal; z-index: 40; box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+}
+
+button.primary {
+  width: 100%; margin-top: 10px;
+  background: var(--accent); color: #051020; border: none; border-radius: 6px;
+  padding: 8px 16px; font-weight: 700; cursor: pointer; font-size: 13px;
+}
+button.primary:hover { filter: brightness(1.08); }
+
+.side-head { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+#entriesTitle { font-weight: 700; font-size: 13px; }
+.muted { color: var(--muted); font-size: 11px; }
+
+.entries-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1 1 auto; min-height: 60px; }
+.entries-list li {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 3px 8px;
+  padding: 7px 12px; border-bottom: 1px solid var(--panel-2); cursor: pointer; align-items: center;
+}
+.entries-list li:hover { background: var(--panel-2); }
+.entries-list li.selected { background: #223; box-shadow: inset 3px 0 0 var(--accent); }
+.badge { font-weight: 700; font-size: 11px; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+.badge.long { background: rgba(38,194,129,0.18); color: var(--long); }
+.badge.short { background: rgba(239,83,80,0.18); color: var(--short); }
+.etime { font-variant-numeric: tabular-nums; }
+.emeta { grid-column: 1 / -1; color: var(--muted); font-size: 11px; display: flex; gap: 10px; }
+.pos { color: var(--long); } .neg { color: var(--short); }
+
+/* エントリー詳細インラインアコーディオン: クリックした行の直下に展開する（旧・最下部固定ペインは廃止）。
+   li として entriesList 内に挿入されるので、クリック位置のすぐ下に必ず出て「画面外で見えない」が起きない。
+   ※ `.entries-list li`（display:grid）より詳細度を上げるため `.entries-list li.entry-detail` で当てる。 */
+.entries-list li.entry-detail {
+  display: block; cursor: default;
+  padding: 10px 12px; background: var(--panel-2);
+  border-bottom: 1px solid var(--border); box-shadow: inset 3px 0 0 var(--accent);
+  font-size: 12px;
+}
+.entries-list li.entry-detail:hover { background: var(--panel-2); }
+.entry-detail h4 { margin: 0 0 8px; font-size: 13px; }
+.entry-detail table { width: 100%; border-collapse: collapse; }
+.entry-detail td { padding: 2px 0; }
+.entry-detail td:first-child { color: var(--muted); white-space: nowrap; padding-right: 10px; }
+.entry-detail td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.entry-detail .reason { color: var(--muted); margin-top: 8px; }
+
+/* --- 統計カード --- */
+/* 既定は自然高さ。JS が px 高さを当てたら固定＋内部スクロール（内容が消えない）。 */
+.stats-card { padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--panel-2); font-size: 12px; flex: 0 0 auto; overflow-y: auto; min-height: 0; }
+.stats-card .empty-note { color: var(--muted); text-align: center; padding: 8px 0; }
+.stats-top { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; margin-bottom: 8px; }
+.stats-top .cell { display: flex; flex-direction: column; gap: 1px; }
+.stats-top .cell .k { color: var(--muted); font-size: 10px; }
+.stats-top .cell .v { font-variant-numeric: tabular-nums; font-weight: 600; }
+.stats-top .cell .v small { font-weight: 400; color: var(--muted); font-size: 10px; }
+.stats-table { width: 100%; border-collapse: collapse; margin: 4px 0; }
+.stats-table th { color: var(--muted); font-weight: 500; font-size: 10px; text-align: right; padding: 2px 4px; }
+.stats-table th:first-child { text-align: left; }
+.stats-table td { text-align: right; padding: 2px 4px; font-variant-numeric: tabular-nums; }
+.stats-table td:first-child { text-align: left; color: var(--muted); }
+.stats-session { color: var(--muted); margin-top: 6px; display: flex; gap: 12px; flex-wrap: wrap; }
+.stats-session b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* --- スクリーニングビュー --- */
+#screenView { flex: 1 1 auto; min-width: 0; overflow: auto; padding: 16px 18px; }
+.screen-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 10px; flex-wrap: wrap; }
+.screen-head h2 { margin: 0; font-size: 16px; }
+.screen-run { flex-direction: row; align-items: center; gap: 6px; margin-left: auto; }
+.screen-empty { color: var(--muted); padding: 40px; text-align: center; }
+.screen-table-wrap { overflow-x: auto; }
+.screen-table { border-collapse: collapse; width: 100%; font-size: 12px; }
+.screen-table th, .screen-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.screen-table th {
+  position: sticky; top: 0; background: var(--panel); color: var(--muted); font-weight: 600;
+  text-align: right; cursor: pointer; user-select: none;
+}
+.screen-table th:first-child, .screen-table td:first-child { text-align: left; }
+.screen-table th.sorted-asc::after { content: " ▲"; color: var(--accent); }
+.screen-table th.sorted-desc::after { content: " ▼"; color: var(--accent); }
+.screen-table td { text-align: right; font-variant-numeric: tabular-nums; }
+.screen-table tbody tr { cursor: pointer; }
+.screen-table tbody tr:hover { background: var(--panel-2); }
+.screen-table .rank { color: var(--muted); }
+.screen-table .code { font-weight: 600; color: var(--text); }
+.screen-table .sub { color: var(--muted); font-size: 11px; }
+
+/* --- 手法適性バッジ（◎/○/×。レンジ中央値ベース） --- */
+.apt-good { color: var(--long); font-weight: 700; }   /* ◎ ≥25bp */
+.apt-ok   { color: var(--accent); font-weight: 700; } /* ○ ≥15bp */
+.apt-bad  { color: var(--short); }                    /* × <15bp（ボラ不足） */
+.screen-table td.apt-good, .screen-table td.apt-ok, .screen-table td.apt-bad { text-align: center; font-size: 14px; }
+.apt-only { margin-left: auto; display: flex; align-items: center; gap: 4px; font-size: 12px; cursor: pointer; }
+.apt-only span { color: var(--text); }
+/* サイドバー銘柄の適性印 */
+.sym-apt { flex: 0 0 auto; font-size: 11px; margin-left: 4px; }
+
+/* --- エントリー履歴パネル（チャンピオン設定固定） --- */
+.history-panel {
+  margin-top: 14px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--panel); overflow: hidden;
+}
+.history-panel.hidden { display: none; }
+.history-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--panel-2);
+}
+.history-head h3 { margin: 0; font-size: 14px; color: var(--text); }
+.history-head h3 .sub { color: var(--muted); font-size: 12px; font-weight: 400; }
+.history-head .ghost {
+  background: none; border: none; color: var(--muted); font-size: 20px; line-height: 1;
+  cursor: pointer; padding: 0 4px;
+}
+.history-head .ghost:hover { color: var(--text); }
+.history-body { padding: 10px 14px; max-height: 60vh; overflow-y: auto; }
+.hist-total { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 10px; }
+.hist-day { margin-bottom: 14px; }
+.hist-day-head { font-size: 12px; color: var(--text); font-weight: 600; margin-bottom: 4px; }
+.hist-day-head .hist-day-sum { color: var(--muted); font-weight: 400; margin-left: 6px; }
+.hist-table { border-collapse: collapse; width: 100%; font-size: 12px; }
+.hist-table th, .hist-table td { padding: 4px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.hist-table th { color: var(--muted); font-weight: 600; text-align: left; }
+.hist-table td.num, .hist-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.hist-table tbody tr { cursor: pointer; }
+.hist-table tbody tr:hover { background: var(--panel-2); }
+
+/* --- トースト --- */
+.toast {
+  position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 50;
+  background: #3a1d1d; color: #ffd7d5; border: 1px solid var(--down);
+  padding: 10px 16px; border-radius: 8px; max-width: 80%; box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+
+/* --- 注釈トグルボタン（ヘッダ） --- */
+.annotate-toggle {
+  margin-left: 8px; background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px;
+  cursor: pointer; font-size: 13px; white-space: nowrap;
+}
+.annotate-toggle:hover { border-color: var(--accent); }
+.annotate-toggle.active {
+  background: var(--ann); color: #241a00; border-color: var(--ann); font-weight: 700;
+}
+body.tab-screen #annotateBtn { display: none; }
+/* 注釈モード中はチャート上でクリック対象であることを示す */
+body.annotate-mode #mainChart { cursor: crosshair; }
+
+/* --- モーダル（注釈の追加・閲覧） --- */
+.modal {
+  position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.55);
+}
+.modal-box {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: 18px 20px; width: 380px; max-width: 92vw; box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+}
+.modal-box h3 { margin: 0 0 10px; font-size: 15px; }
+.ann-time { margin-bottom: 12px; }
+.ann-kinds { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.ann-kinds label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; }
+.ann-kinds input { accent-color: var(--accent); width: 15px; height: 15px; }
+.modal-box textarea {
+  width: 100%; background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px; padding: 8px; font-size: 13px;
+  font-family: inherit; resize: vertical; min-height: 60px;
+}
+.modal-box textarea:focus { outline: none; border-color: var(--accent); }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.modal-actions button {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; padding: 7px 16px; cursor: pointer; font-size: 13px;
+}
+.modal-actions button:hover { border-color: var(--accent); }
+.modal-actions button.primary { background: var(--accent); color: #051020; border: none; font-weight: 700; }
+.modal-actions button.danger { background: #3a1d1d; color: #ffd7d5; border-color: var(--down); }
+/* 注釈閲覧の本文（種別バッジ＋理由＋文脈テーブル） */
+.ann-view-kind { font-weight: 700; margin-bottom: 6px; }
+.ann-view-kind.long { color: var(--long); } .ann-view-kind.short { color: var(--short); }
+.ann-view-kind.no { color: var(--muted); }
+.ann-view-kind.attn { color: var(--ann); }
+.ann-view-reason { margin: 6px 0 10px; white-space: pre-wrap; }
+.ann-view-ctx { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ann-view-ctx td { padding: 2px 0; }
+.ann-view-ctx td:first-child { color: var(--muted); }
+.ann-view-ctx td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* --- スクリーニング実行バー（機能B: この条件で実行） --- */
+.screen-run-bar {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 10px 12px; margin-bottom: 12px;
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
+}
+.screen-run-note { color: var(--muted); font-size: 12px; }
+.screen-period { flex-direction: row; align-items: center; gap: 6px; }
+.screen-period .period-inputs { display: flex; align-items: center; gap: 5px; }
+.screen-run-btn { width: auto; margin-top: 0; padding: 7px 18px; }

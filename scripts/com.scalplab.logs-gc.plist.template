@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  ログ掃除の launchd テンプレート。__ABSOLUTE_PATH__ は scripts/install_launchd.sh が
+  プロジェクト実パスに置換する（リポジトリに絶対パスをコミットしないため）。
+
+  毎日 06:00 に実行する。US セッションの finalize（05:05）後・JP 録画（08:50）前で、
+  どちらの録画とも重ならない時刻。
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.scalplab.logs-gc</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>__ABSOLUTE_PATH__/scripts/logs_gc.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__ABSOLUTE_PATH__</string>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key><integer>6</integer>
+        <key>Minute</key><integer>0</integer>
+    </dict>
+
+    <!-- ロード時の即時実行はしない（録画中に走らせない）。 -->
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>__ABSOLUTE_PATH__/logs/launchd-logs-gc.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__ABSOLUTE_PATH__/logs/launchd-logs-gc.err.log</string>
+</dict>
+</plist>

@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>scalp-lab エントリー確認</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/lightweight-charts.standalone.production.js"></script>
+</head>
+<body class="tab-chart">
+  <header id="topbar">
+    <div class="brand">scalp-lab <span>エントリー確認</span></div>
+
+    <nav class="tabs" id="tabs" role="tablist" aria-label="表示切替">
+      <button type="button" data-tab="chart" class="active">チャート</button>
+      <button type="button" data-tab="screen">スクリーニング</button>
+    </nav>
+
+    <div class="current-symbol" id="currentSymbol"></div>
+
+    <!-- レジームバッジ: 直前3営業日の◎銘柄で順張り/逆張りのどちらが勝っていたかを常時表示。クリックで再計算 -->
+    <button type="button" id="regimeBadge" class="regime-badge" hidden
+            title="直前3営業日の◎銘柄で順張り(トゲ)と逆張り(ボリンジャー)の合計netを比較した当日レジーム。クリックで再計算">
+    </button>
+
+    <label class="control tf-only" id="tfControl" hidden>
+      <span>足種</span>
+      <select id="tf">
+        <option value="5">5秒</option>
+        <option value="10">10秒</option>
+        <option value="30">30秒</option>
+        <option value="60">1分</option>
+      </select>
+    </label>
+
+    <!-- 日送りナビ（日本株1分足のみ。1営業日単位表示＋◀▶で日移動・全期間切替・表示日レジームバッジ） -->
+    <div class="control daynav-ctl" id="dayNav" hidden>
+      <div class="daynav">
+        <button type="button" id="dayPrev" class="daynav-btn" aria-label="前の営業日" title="前の営業日">◀</button>
+        <span id="dayLabel" class="daynav-label" aria-live="polite"></span>
+        <button type="button" id="dayNext" class="daynav-btn" aria-label="次の営業日" title="次の営業日">▶</button>
+        <button type="button" id="dayRegimeBadge" class="regime-badge daynav-regime" hidden
+                title="この表示日のレジーム（直前3営業日データでの判定）"></button>
+        <button type="button" id="dayAll" class="daynav-all" title="全期間（連結表示）に切替">全期間</button>
+      </div>
+    </div>
+
+    <!-- 注釈モード: ON の間はチャートのクリックで「ここでエントリー/ダメ」を記録できる（手法の教師データ） -->
+    <button type="button" id="annotateBtn" class="annotate-toggle"
+            title="ONにしてチャートをクリックすると『ここでエントリー / 入っちゃダメ』を理由つきで記録できます">
+      ✎ 注釈
+    </button>
+  </header>
+
+  <main id="workspace">
+    <!-- 左: 銘柄リスト（常設） -->
+    <aside id="symbolList" aria-label="銘柄">
+      <div class="sym-search">
+        <input type="search" id="symFilter" placeholder="銘柄を絞り込み" autocomplete="off">
+      </div>
+      <div id="symGroups" class="sym-groups"></div>
+    </aside>
+
+    <!-- 左｜中央 の境界（ドラッグで左サイドバー幅を調整） -->
+    <div id="resizeLeft" class="col-resizer" title="ドラッグで幅を調整" aria-hidden="true"></div>
+
+    <!-- 中央: チャート -->
+    <section id="chartArea">
+      <div id="mainChart"></div>
+      <!-- メインチャート｜RCI の境界（ドラッグで高さを調整） -->
+      <div id="resizeRci" class="row-resizer" title="ドラッグで高さを調整" aria-hidden="true"></div>
+      <div id="rciChart"></div>
+
+      <div id="legend" class="legend hidden"></div>
+      <div id="moreLoading" class="more-loading hidden">過去データ読み込み中…</div>
+
+      <div id="loading" class="overlay hidden">
+        <div class="spinner"></div>
+        <div id="loadingText">読み込み中…</div>
+      </div>
+      <div id="empty" class="overlay hidden">
+        <div class="empty-box">
+          <div class="empty-icon">📉</div>
+          <div id="emptyMsg">データがありません。</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 中央｜右 の境界（ドラッグで右パネル幅を調整） -->
+    <div id="resizeRight" class="col-resizer" title="ドラッグで幅を調整" aria-hidden="true"></div>
+
+    <!-- 右: 条件 + 統計 + エントリー一覧 -->
+    <aside id="sidebar">
+      <div id="conditions" class="conditions">
+        <div class="cond-head">エントリー条件</div>
+
+        <!-- モード3択: 自動（表示日のレジームに連動）／順張り固定（トゲ反転）／逆張り固定（ボリンジャー） -->
+        <div class="mode-seg" id="modeSeg" role="group" aria-label="エントリーモード">
+          <button type="button" class="mode-btn" data-mode="auto" title="表示日のレジーム判定に自動で従う">自動</button>
+          <button type="button" class="mode-btn" data-mode="trend" title="常にトゲ反転（順張り）">順張り</button>
+          <button type="button" class="mode-btn" data-mode="revert" title="常にボリンジャーフェード（逆張り）">逆張り</button>
+        </div>
+        <div class="mode-desc" id="modeDesc"></div>
+
+        <!-- 簡易パラメータ: トゲ（深さ/戻り）・ボリンジャー z・クールダウン・コスト -->
+        <div class="cond-row small spike-sub" id="rowSpike">
+          <span class="cond-label">トゲ 深さ</span>
+          <input type="number" id="spikeDepthV" class="cond-num spike-num" step="10" min="0" inputmode="numeric">
+          <span class="cond-label spike-lbl2">戻り</span>
+          <input type="number" id="spikeTurnV" class="cond-num spike-num" step="5" min="0" inputmode="numeric">
+        </div>
+        <div class="cond-row small" id="rowBoll">
+          <span class="cond-label">ボリンジャー z</span>
+          <input type="number" id="fadeBollV" class="cond-num" step="0.5" min="0" inputmode="decimal" title="|z|がこの値以上で逆張り発火（既定3.0）">
+        </div>
+        <div class="cond-row small">
+          <span class="cond-label" id="cooldownLabel">クールダウン(本)</span>
+          <input type="number" id="cooldownV" class="cond-num" step="1" min="0" inputmode="numeric">
+        </div>
+        <div class="cond-row small">
+          <span class="cond-label">コスト(bp)</span>
+          <input type="number" id="costV" class="cond-num" step="0.5" min="0" inputmode="decimal">
+        </div>
+
+        <!-- 詳細設定（既定は折りたたみ。機能は消さず移動のみ＝過去の恒久要件を順守） -->
+        <button type="button" id="detailToggle" class="detail-toggle" aria-expanded="false">詳細設定 ▸</button>
+        <div id="detailPanel" class="detail-panel hidden">
+          <div class="cond-row">
+            <label class="cond-toggle"><input type="checkbox" id="sarOn" checked><span class="cond-label">SAR 方向フィルタ</span></label>
+            <span class="help" tabindex="0" role="button" aria-label="SAR方向フィルタの説明"
+                  data-tip="ON=価格がSARより上ならロングのみ・下ならショートのみ（順張り向け）。OFF=SARで方向を絞らない（逆張り向け）。モードを切替えると自動で設定されるが、ここで上書きもできる（バー版のみ効く）">?</span>
+          </div>
+          <div class="cond-row">
+            <label class="cond-toggle"><input type="checkbox" id="angleOn"><span class="cond-label">角度</span></label>
+            <input type="number" id="angleV" class="cond-num" step="1" min="0" inputmode="numeric">
+          </div>
+          <div class="cond-row">
+            <label class="cond-toggle"><input type="checkbox" id="prevDiffOn"><span class="cond-label">直前RCI差</span></label>
+            <input type="number" id="prevDiffV" class="cond-num" step="1" min="0" inputmode="numeric">
+          </div>
+          <div class="cond-row">
+            <label class="cond-toggle"><input type="checkbox" id="rciSignOn"><span class="cond-label">RCI符号（＋はS／−はL）</span></label>
+            <span class="help" tabindex="0" role="button" aria-label="RCI符号ゲートの説明"
+                  data-tip="シグナル時点のRCIが＋ならショートのみ・−ならロングのみ許可。境界レベルを上げると「高値圏(>+レベル)でだけショート／安値圏(<-レベル)でだけロング」に絞れる（0は従来の0境界）。教師注釈「高値圏でRCIが80近くで上トゲを付けて下げたらショート」由来">?</span>
+            <input type="number" id="rciSignLevelV" class="cond-num" step="10" min="0" inputmode="numeric" title="符号ゲートの境界レベル ±（0で0境界。例:80なら>+80でのみS・<-80でのみL）">
+          </div>
+          <div class="cond-row">
+            <label class="cond-toggle"><input type="checkbox" id="dualOn"><span class="cond-label">RCI同調</span></label>
+            <span class="help" tabindex="0" role="button" aria-label="RCI同調（デュアルRCIトレンド）の説明"
+                  data-tip="短期RCI(9)と長期RCI(14)が直近の窓で両方そろって上昇ならロング／両方そろって下降ならショート。各RCIの窓間の変化量がこの値以上で発火。トゲ反転とはOR（どちらか成立でエントリー候補）。教師注釈「9と14が一緒に右肩上がりだと強い」由来">?</span>
+            <input type="number" id="dualV" class="cond-num" step="5" min="0" inputmode="numeric">
+          </div>
+          <div class="cond-row">
+            <label class="cond-toggle"><input type="checkbox" id="fadeOn"><span class="cond-label">σフェード</span></label>
+            <span class="help" tabindex="0" role="button" aria-label="σフェード（急変逆張り）の説明"
+                  data-tip="1分リターンが直近60本の標準偏差σのk倍を超えた瞬間に逆方向へ入る急変逆張り（上げ急変→ショート／下げ急変→ロング）。SAR方向フィルタとは独立。トゲ反転などとはOR。トゲ順張りが負ける急変日に効きやすい補完トリガー（バー版のみ効く）">?</span>
+            <input type="number" id="fadeV" class="cond-num" step="0.5" min="0" inputmode="decimal" title="σの何倍を超えたら発火するか（k。既定3.0）">
+          </div>
+          <div class="cond-row">
+            <label class="cond-toggle"><input type="checkbox" id="effOn"><span class="cond-label">効率下限</span></label>
+            <span class="help" tabindex="0" role="button" aria-label="効率下限の説明"
+                  data-tip="RCIの変化量 ÷ 価格の動き幅(ATR正規化)。価格がほとんど動いていないのにRCIが大きく動く場面だけに絞るフィルタ">?</span>
+            <input type="number" id="effV" class="cond-num" step="0.5" min="0" inputmode="decimal">
+          </div>
+          <div class="cond-row small">
+            <span class="cond-label">寄り抑制(本)</span>
+            <span class="help" tabindex="0" role="button" aria-label="寄り抑制の説明"
+                  data-tip="前場の最初N本のバーではエントリーしない（0=無効）。寄り30分は損の傾向が実測で一貫していたため。評価は変えずシグナルだけ抑制。バー版のみ効く">?</span>
+            <input type="number" id="skipOpenV" class="cond-num" step="5" min="0" inputmode="numeric">
+          </div>
+          <div class="cond-row cond-attn">
+            <label class="cond-toggle"><input type="checkbox" id="attnShowOn" checked><span class="cond-label">注目シグナル表示</span></label>
+            <span class="help" tabindex="0" role="button" aria-label="注目シグナルの説明"
+                  data-tip="エントリー条件が揃う前段（トゲの落差が閾値の70%まで来たが戻り未確認）で出る事前アラート。黄色の四角「!」。早く気づくための表示で、エントリー数には影響しない">?</span>
+          </div>
+        </div>
+
+        <button type="button" id="apply" class="primary">適用</button>
+      </div>
+
+      <!-- エントリー条件｜以下 の境界（ドラッグで条件ブロックの高さを調整） -->
+      <div id="resizeCond" class="row-resizer" title="ドラッグで高さを調整" aria-hidden="true"></div>
+
+      <div class="side-head">
+        <div id="entriesTitle">エントリー</div>
+        <div id="entriesSub" class="muted"></div>
+      </div>
+      <div id="statsCard" class="stats-card hidden"></div>
+
+      <!-- 統計｜エントリー一覧 の境界（ドラッグで統計ブロックの高さを調整） -->
+      <div id="resizeStats" class="row-resizer" title="ドラッグで高さを調整" aria-hidden="true"></div>
+
+      <ul id="entriesList" class="entries-list"></ul>
+    </aside>
+
+    <!-- スクリーニングタブ -->
+    <section id="screenView">
+      <div class="screen-head">
+        <h2>勝ちやすい銘柄ランキング</h2>
+        <div id="screenMeta" class="muted"></div>
+        <label class="control apt-only" title="レンジ中央値 ≥15bp（○）・≥25bp（◎）の銘柄だけ表示">
+          <input type="checkbox" id="aptOnly"> <span>適性銘柄のみ表示</span>
+        </label>
+        <label class="control screen-run">
+          <span>保存済み</span>
+          <select id="screenRun"></select>
+        </label>
+      </div>
+
+      <!-- 実行バー: 現在のチャート条件（トゲ反転等）を全 JP 銘柄に期間指定で適用して銘柄別成績を出す -->
+      <div class="screen-run-bar">
+        <span class="screen-run-note">現在のチャート条件（トゲ反転・角度・効率など）を全日本株に適用して実行します。</span>
+        <label class="control screen-period"><span>期間</span>
+          <div class="period-inputs">
+            <input type="date" id="screenFrom" aria-label="開始日">
+            <span class="period-sep">〜</span>
+            <input type="date" id="screenTo" aria-label="終了日">
+          </div>
+        </label>
+        <button type="button" id="screenRunBtn" class="primary screen-run-btn">この条件で実行</button>
+      </div>
+
+      <div id="screenEmpty" class="screen-empty hidden"></div>
+      <div class="screen-table-wrap">
+        <table id="screenTable" class="screen-table"></table>
+      </div>
+
+      <!-- エントリー履歴パネル: ランキング行クリックでチャンピオン設定の全エントリーを日別に表示 -->
+      <div id="historyPanel" class="history-panel hidden">
+        <div class="history-head">
+          <div>
+            <h3 id="historyTitle"></h3>
+            <div id="historySub" class="muted"></div>
+          </div>
+          <button type="button" id="historyClose" class="ghost" aria-label="閉じる">×</button>
+        </div>
+        <div id="historyBody" class="history-body"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 注釈: 追加ダイアログ（チャートクリックで開く） -->
+  <div id="annotateModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="annotateModalTitle">
+    <div class="modal-box">
+      <h3 id="annotateModalTitle">この足に注釈を追加</h3>
+      <div class="ann-time muted" id="annotateBarTime"></div>
+      <div class="ann-kinds">
+        <label><input type="radio" name="annKind" value="entry_long" checked> ロングすべき</label>
+        <label><input type="radio" name="annKind" value="entry_short"> ショートすべき</label>
+        <label><input type="radio" name="annKind" value="no_entry"> 入っちゃダメ</label>
+        <label><input type="radio" name="annKind" value="attention"> 注目すべき（事前アラート）</label>
+      </div>
+      <textarea id="annotateReason" rows="3" placeholder="理由（例: プラス圏で鋭く下折れしたトゲの根元。任意）"></textarea>
+      <div class="modal-actions">
+        <button type="button" id="annotateCancel">キャンセル</button>
+        <button type="button" id="annotateSave" class="primary">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 注釈: 閲覧・削除ダイアログ（注釈マーカーのクリックで開く） -->
+  <div id="annotateView" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="annotateViewTitle">
+    <div class="modal-box">
+      <h3 id="annotateViewTitle">注釈</h3>
+      <div id="annotateViewBody"></div>
+      <div class="modal-actions">
+        <button type="button" id="annotateViewClose">閉じる</button>
+        <button type="button" id="annotateViewDelete" class="danger">削除</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
